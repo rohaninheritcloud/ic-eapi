@@ -1,0 +1,9 @@
+sf:
+  password: "![BCzaw2k9PrHaPEaGiGEKGA==]"
+  token: "![Hx3nAIjW/OungUI21c1KiwRV0XGbRMB9fhqFLPLiA4A=]"
+  
+db:
+  password: "![8gKWUSIK6F6I1egSxXbPAQ==]"
+  user: "![rE7NqusMrWOQEqkJWrf1PewHHOCLQE5G]"
+  database: "![o3MpTszKPenzJtSsVV+Y0B3sz6YXtzea]"
+  port: "3306"

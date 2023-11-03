@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	<os:object-store name="Object_store" doc:name="Object store" doc:id="af6d03d0-8fee-4ad3-ab04-c9caf2b6e3f8" maxEntries="100" />
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="aec04e5e-cfae-4680-af33-c95dd19d0964" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<flow name="eapiFlow" doc:id="7ae76a55-2d76-4e80-bd31-55ccd36ee6a2" >
+		<salesforce:new-object-listener doc:name="On New Object" doc:id="ec251ab7-ed13-4d40-81b0-b7b9b4e6893b" config-ref="Salesforce_Config" objectType="Account">
+			<scheduling-strategy >
+				<fixed-frequency />
+			</scheduling-strategy>
+		</salesforce:new-object-listener>
+		<logger level="INFO" doc:name="Logger" doc:id="7a2fc175-3cbe-4654-beab-ecf60d5c63e7" message="#[payload]"/>
+	</flow>
+	<flow name="implementationFlow" doc:id="4f08e3fb-0950-40ee-8269-343b4d17016b" >
+		<salesforce:modified-object-listener doc:name="On Modified Object" doc:id="3925c844-93f2-4bbb-9be8-3e4fa8721828" config-ref="Salesforce_Config" objectType="Account">
+			<scheduling-strategy >
+				<fixed-frequency />
+			</scheduling-strategy>
+		</salesforce:modified-object-listener>
+		<logger level="INFO" doc:name="Logger" doc:id="6bce3702-fcc5-4ac9-9416-8873f26da0ab" message='#[{"lastModifiedDate": payload.LastModifiedDate,&#10;	"lastViewedDate": payload.LastViewedDate&#10;}]'/>
+	</flow>
+	<flow name="implementationFlow1" doc:id="aa61aabe-e209-446e-98cb-db5cec332b9f" >
+		<db:listener doc:name="On Table Row" doc:id="53f4e6ac-cdf4-4733-9f7e-905265658229" config-ref="Database_Config" table="accounts" watermarkColumn="id" idColumn="id">
+			<scheduling-strategy >
+				<fixed-frequency frequency="1" timeUnit="HOURS"/>
+			</scheduling-strategy>
+		</db:listener>
+		<logger level="INFO" doc:name="Logger" doc:id="7157b146-4c09-4ddb-ad29-0dcf0aa878ab" message="#[payload]"/>
+	</flow>
+	<flow name="implementationFlow2" doc:id="7be98ebb-a8e8-4590-893f-728db459bf04" >
+		<db:listener table="accounts" doc:name="On Table Row" doc:id="58f6989b-e266-4252-800b-05c712cb933f" config-ref="Database_Config" watermarkColumn="updated_at" idColumn="id">
+			<scheduling-strategy >
+				<fixed-frequency frequency="5" timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</db:listener>
+		<logger level="INFO" doc:name="Logger" doc:id="08fd5837-63ec-4ae9-b5e0-82e2113982d5" message="#[payload]"/>
+	</flow>
+	<flow name="implementationFlow3" doc:id="b8f04881-9a91-40a1-8b1f-ac9a475f53ad" >
+		<scheduler doc:name="Scheduler" doc:id="b6c92c98-c919-4442-9664-1b204c01872c" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="10000"/>
+			</scheduling-strategy>
+		</scheduler>
+		<os:retrieve doc:name="Retrieve" doc:id="05a74529-516e-4bd3-a1a9-fa11a7f7075c" key="updatedAt" objectStore="Object_store">
+			<os:default-value ><![CDATA[0000-00-00 00:00:00]]></os:default-value>
+		</os:retrieve>
+		<db:select doc:name="Select" doc:id="9d05c18b-5985-4bfa-afaf-cf5573eef7d3" config-ref="Database_Config">
+			<db:sql ><![CDATA[select updated_at from accounts where updated_at > :updatedAt]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	"updatedAt": payload
+}]]]></db:input-parameters>
+		</db:select>
+		<choice doc:name="Choice" doc:id="c87f21cf-86f7-45a1-a8d9-032b8d089e45" >
+			<when expression="#[not isEmpty(payload)]">
+				<os:store doc:name="Store" doc:id="f98a2ad1-334b-41a5-b52f-e509ef2168bc" objectStore="Object_store" key="updatedAt">
+					<os:value ><![CDATA[#[max(payload.*updated_at)]]]></os:value>
+				</os:store>
+				<logger level="INFO" doc:name="Logger" doc:id="78195089-9db7-495a-a9f3-b0bbbe9a7287" message="#[payload]"/>
+			</when>
+			<otherwise>
+				<logger level="INFO" doc:name="Logger" doc:id="b9ddb067-72b7-4e89-8fd7-a04f42f77367" message='#[{&#10;	"message": "buhahhaha, Byeee"&#10;}]'/>
+			</otherwise>
+		</choice>
+	</flow>
+</mule>
